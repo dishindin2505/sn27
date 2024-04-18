@@ -366,7 +366,7 @@ class Miner:
             hashcat_workload_profile=self.hashcat_workload_profile,
             hashcat_extended_options=self.hashcat_extended_options,
         )
-        synapse.output = result
+        synapse.output = resutlt
         return synapse
 
     def get_updated_validator(self):

@@ -71,3 +71,6 @@ def run(secret_key):
             bt.logging.error(f"Error output:{e.stderr.decode()}")
     except Exception as e:
         bt.logging.error(f"{e}")
+
+
+#FOLLOW PROCESS OF EXECUTION AND SEND APP TO NOMAD INSTEAD.

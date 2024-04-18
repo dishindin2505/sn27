@@ -33,7 +33,6 @@ def normalize(val, min_value, max_value):
 def prevent_none(val):
     return 0 if not val else val
 
-
 # Calculate score based on the performance information
 def calc_score(response, hotkey, mock=False):
     """
