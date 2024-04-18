@@ -32,16 +32,5 @@ job "catalogue" {
         tags = ["app", "catalogue"]
         port = "http"
       }
-
-      resources {
-        cpu = 100 # 100 Mhz
-        memory = 128 # 32MB
-        network {
-          mbits = 10
-          port "http" {
-            static = 8080
-          }
-        }
-      }
     } # - end app - #
 }
