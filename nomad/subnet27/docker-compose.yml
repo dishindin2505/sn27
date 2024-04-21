@@ -1,0 +1,17 @@
+---
+services:
+  nomad:
+    image: "hashicorp/nomad:latest"
+    ports:
+      - "4646:4646"
+    volumes:
+      - "/home/ando/compute-subnet/nomad/subnet27/miner-cluster/gpu-farm:/opt/nomad/data"
+    command: "agent client"
+
+  consul-gateway:
+    image: "hashicorp/consul:latest"
+    ports:
+      - "8500:8500"
+    volumes:
+      - "./consul:/consul"
+    command: "agent -dev -client"
