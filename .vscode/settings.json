@@ -6,5 +6,9 @@
     "python.testing.pytestEnabled": true,
     "files.exclude": {
         "**/.*": true,
-    }
+    },
+    "editor.experimentalInlineEdit.backgroundColoring": true,
+    "editor.fontFamily": "FiraCode Nerd Font Mono",
+    "editor.defaultFormatter": "VisualStudioExptTeam.vscodeintellicode",
+    "editor.definitionLinkOpensInPeek": true
 }    // ...existing settings...
