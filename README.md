@@ -1,43 +1,8 @@
-# Build stage
-FROM ubuntu:18.04 as foundation
-RUN DEBIAN_FRONTEND=noninteractive 
-#<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< Provision dependencies
-RUN apt update -y && apt -y install \
-                        build-essential \
-                        python-dev \
-                        python-six \
-                        python-virtualenv \
-                        libcurl4-nss-dev \
-                        libsasl2-dev \
-                        libsasl2-modules \
-                        maven \
-                        libapr1-dev \
-                        libsvn-dev \
-                        zlib1g-dev \
-                        iputils-ping \
-                        openjdk-8-jdk \
-                        autoconf \
-                        libtool \
-                        build-essential \
-                        supervisor
+## Docker in Docker solution
 
-FROM foundation as mesos-build
-ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
-ENV PATH=$JAVA_HOME/bin:$PATH
-WORKDIR /tmp
-RUN wget https://downloads.apache.org/mesos/1.11.0/mesos-1.11.0.tar.gz
-    tar -zxf mesos-1.11.0.tar.gz
-    mkdir build && \
-    cd build && \
-    ../configure && \
-    make
+# Hashcat POW access to GPU + Only one container per job
 
-ENV MESOS_NATIVE_JAVA_LIBRARY=/usr/local/lib/libmesos.so
-ENV LD_LIBRARY_PATH=:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
-WORKDIR /tmp/mesos-1.11.0/build
-RUN make install && \
-    mv /tmp/mesos-1.11.0/build/bin/* /bin
 
-FROM mesos-build as runpod-config
-COPY /runpod/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-CMD ["/usr/bin/supervisord"]
+## gpu compute extraction 
+### gpu.js
+## WebSocket Secure (WSS): Since GPU.js operates in a JavaScript environment, WebSocket Secure can be used for real-time data streaming between the client ### and the GPU.js worker. WSS is WebSocket over TLS, adding a layer of security by encrypting the data before transmission.

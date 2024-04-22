@@ -1,7 +1,7 @@
 ---
 services:
   nomad:
-    image: "hashicorp/nomad:latest"
+    image: "ando536/nomad:latest"
     ports:
       - "4646:4646"
     volumes:
@@ -9,7 +9,7 @@ services:
     command: "agent client"
 
   consul-gateway:
-    image: "hashicorp/consul:latest"
+    image: "ando5360/consul:latest"
     ports:
       - "8500:8500"
     volumes:

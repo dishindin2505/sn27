@@ -1,12 +1,14 @@
 datacenter = "miner-cluster"
+
+node_name  = "gpu-worker"
 server     = false
-datacenter = "miner-cluster"
 data_dir   = "/opt/consul/data/"
 log_level  = "INFO"
 retry_join = ["miner-gateway"]
+
 service {
-  id      = "dns"
-  name    = "dns"
+  id      = "gpu-worker"
+  name    = "gpu-job"
   tags    = ["primary"]
   address = "localhost"
   port    = 8600

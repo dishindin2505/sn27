@@ -1,9 +1,9 @@
-node_name  = "consul-client"
+datacenter = "miner-cluster"
+node_name  = "pow-client"
 server     = false
-datacenter = "dc1"
-data_dir   = "consul/data"
+data_dir   = "/opt/consul/data"
 log_level  = "INFO"
-retry_join = ["miner-server"]
+retry_join = ["miner-gateway"]
 service {
   id      = "dns"
   name    = "dns"

@@ -1,1 +1,1 @@
-pledge | make a nomad integration with this binary
+

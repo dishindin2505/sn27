@@ -1,20 +1,23 @@
-node_name  = "consul-client"
-server     = false
-datacenter = "dc1"
-data_dir   = "consul/data"
-log_level  = "INFO"
-retry_join = ["consul-server"]
-service {
-  id      = "dns"
-  name    = "dns"
-  tags    = ["primary"]
-  address = "localhost"
-  port    = 8600
-  check {
-    id       = "dns"
-    name     = "Consul DNS TCP on port 8600"
-    tcp      = "localhost:8600"
-    interval = "10s"
-    timeout  = "1s"
+node_name = "validator-gateway"
+server = true
+ui_config {
+  enabled = true
+}
+data_dir = "/opt/consul/data"
+addresses {
+  http = "127.0.0.0"
+}
+retry_join = [
+  "miner-gateway",
+]
+encrypt = "aPuGh+5UDskRAbkLaXRzFoSOcSM+5vAK+NEYOWHJH7w="
+tls {
+  defaults {
+    verify_incoming = true
+    verify_outgoing = true
+    ca_file = "/consul/config/certs/consul-agent-ca.pem"
+    cert_file = "/consul/config/certs/dc1-server-consul-0.pem"
+    key_file = "/consul/config/certs/dc1-server-consul-0-key.pem"
+    verify_server_hostname = true
   }
 }
