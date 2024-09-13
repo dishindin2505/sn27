@@ -58,7 +58,10 @@ from fastapi import (
     Request,
     WebSocket,
     WebSocketDisconnect,
+    HTTPException,
 )
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.status import HTTP_403_FORBIDDEN
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -76,6 +79,7 @@ MAX_NOTIFY_RETRY = 3         # maximum notify count
 NOTIFY_RETRY_PERIOD = 15     # notify retry interval
 PUBLIC_WANDB_NAME = "opencompute"
 PUBLIC_WANDB_ENTITY = "neuralinternet"
+
 
 
 class UserConfig(BaseModel):
@@ -168,7 +172,14 @@ class ErrorResponse(BaseModel):
     success: bool = False
     message: str
     err_detail: Optional[str] = None
-
+    
+class IPWhitelistMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        client_ip = request.client.host
+        if client_ip not in whitelisted_ips:
+            bt.logging.error(f"API: IP address not allowed: {client_ip}")
+            raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="IP address not allowed")
+        return await call_next(request)
 
 class RegisterAPI:
     def __init__(
@@ -255,7 +266,11 @@ class RegisterAPI:
             self.app = FastAPI(debug=False)
         else:
             self.app = FastAPI(debug=False, docs_url=None, redoc_url=None)
-
+        whitelist_file = "whitelist"
+        with open(whitelist_file, "r") as file:
+            global whitelisted_ips 
+            whitelisted_ips = [line.strip() for line in file]
+        self.app.add_middleware(IPWhitelistMiddleware)
         load_dotenv()
         self._setup_routes()
         self.process = None
