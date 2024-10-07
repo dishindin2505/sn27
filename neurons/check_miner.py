@@ -169,6 +169,7 @@ class MinerChecker:
         finally:
             ssh_client.close()
 
+    @staticmethod
     def run_command_over_ssh(ssh, command):
         """Run a command over SSH and return the result or error."""
         stdin, stdout, stderr = ssh.exec_command(command)
