@@ -110,8 +110,8 @@ class MinerChecker:
                 specs_dict = self.wandb.get_miner_specs({axon.hotkey: axon})
                 bt.logging.info(f"Specs from miner: {specs_dict}")
 
-                bt.logging.info(f"Getting Specs via ssh: {specs_dict}")
-                self.get_system_info_via_ssh(axon.ip, info['username'], info['password'], "sn27-check-container")
+                bt.logging.info(f"Getting Specs via ssh...")
+                self.get_system_info_via_ssh(axon.ip, info['port'], info['username'], info['password'], "sn27-check-container")
             else:
                 # Penalize if the allocation failed
                 self.penalize_miner(axon.hotkey, "ALLOCATION_FAILED", "Allocation failed during resource allocation") 
@@ -254,34 +254,34 @@ class MinerChecker:
             )
             return False, error_message
 
-    def get_system_info_via_ssh(self, host, username, password, container_name):
+    def get_system_info_via_ssh(self, host, port, username, password, container_name):
         """Fetch system information over SSH, including Docker and container status."""
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(host, username=username, password=password)
+        ssh_client = paramiko.SSHClient()
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh_client.connect(hostname=host, port=port, username=username, password=password, timeout=10) 
         
         # CPU Info
-        cpu_count, cpu_freq = self.get_cpu_info(ssh)
+        cpu_count, cpu_freq = self.get_cpu_info(ssh_client)
         bt.logging.info(f"CPU Count: {cpu_count}")
         bt.logging.info(f"CPU Frequency: {cpu_freq}")
         
         # GPU Info
-        gpu_info = self.get_gpu_info(ssh)
+        gpu_info = self.get_gpu_info(ssh_client)
         bt.logging.info("=== GPU Info ===")
         bt.logging.info(gpu_info)
         
         # Disk Info
-        disk_info = self.get_disk_info(ssh)
+        disk_info = self.get_disk_info(ssh_client)
         bt.logging.info("=== Disk Info ===")
         bt.logging.info(disk_info)
         
         # Memory Info
-        memory_info = self.get_memory_info(ssh)
+        memory_info = self.get_memory_info(ssh_client)
         bt.logging.info("=== Memory Info ===")
         bt.logging.info(memory_info)
         
         # Docker Info and container check
-        docker_available, docker_status = self.check_docker_availability_over_ssh(ssh, container_name)
+        docker_available, docker_status = self.check_docker_availability_over_ssh(ssh_client, container_name)
         bt.logging.info("=== Docker Info ===")
         if docker_available:
             bt.logging.info(f"Docker Version: {docker_status}")
@@ -289,7 +289,7 @@ class MinerChecker:
         else:
             bt.logging.info(docker_status)
         
-        ssh.close()
+        ssh_client.close()
 
 def get_config():
     """Set up configuration using argparse.""" 
