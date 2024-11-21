@@ -65,6 +65,12 @@ from neurons.Validator.calculate_pow_score import calc_score
 from neurons.Validator.database.allocate import update_miner_details, select_has_docker_miners_hotkey, get_miner_details
 from neurons.Validator.database.challenge import select_challenge_stats, update_challenge_details
 from neurons.Validator.database.miner import select_miners, purge_miner_entries, update_miners
+from neurons.ssh_utils import execute_ssh_command
+import rsa  # Ensure rsa module is imported
+import base64
+import json
+import importlib
+from challenge_manager import ChallengeManager  # Import the ChallengeManager
 
 
 class Validator:
@@ -201,7 +207,9 @@ class Validator:
 
         # Init the thread.
         self.lock = threading.Lock()
-        self.threads: List[threading.Thread] = []
+
+        # Initialize ChallengeManager
+        self.challenge_manager = ChallengeManager(self)
 
     @staticmethod
     def init_config():
@@ -577,25 +585,96 @@ class Validator:
         return valid_hotkeys
 
     def execute_pow_request(self, uid, axon: bt.AxonInfo, _hash, _salt, mode, chars, mask, difficulty):
-        dendrite = bt.dendrite(wallet=self.wallet)
-        start_time = time.time()
-        bt.logging.info(f"Querying for {Challenge.__name__} - {uid}/{axon.hotkey}/{_hash}/{difficulty}")
-        response = dendrite.query(
-            axon,
-            Challenge(
-                challenge_hash=_hash,
-                challenge_salt=_salt,
-                challenge_mode=mode,
-                challenge_chars=chars,
-                challenge_mask=mask,
-                challenge_difficulty=difficulty,
-            ),
-            timeout=pow_timeout,
+        # SSH connection parameters
+        host = axon.ip
+        port = 22  # Default SSH port
+
+        # Initialize miner_credentials if not already done
+        if not hasattr(self, 'miner_credentials'):
+            self.miner_credentials = {}
+
+        # Generate RSA key pair
+        private_key, public_key = rsa.generate_key_pair()
+
+        # Request SSH credentials from the miner
+        credentials = self.miner_credentials.get(uid)
+        if not credentials:
+            # Send Allocate request to miner to obtain SSH credentials
+            response = self.dendrite.query(
+                axon,
+                Allocate(timeline=1, device_requirement={}, checking=False, public_key=public_key),
+                timeout=60,
+            )
+            if response and response.get("status") is True:
+                encrypted_info = response.get("info", "")
+                # Decrypt SSH credentials
+                decrypted_info_str = rsa.decrypt_data(
+                    private_key.encode("utf-8"),
+                    base64.b64decode(encrypted_info)
+                )
+                credentials = json.loads(decrypted_info_str)
+                self.miner_credentials[uid] = credentials
+            else:
+                bt.logging.error(f"Failed to obtain SSH credentials for miner {uid}")
+                return
+
+        username = credentials.get('username')
+        password = credentials.get('password')
+
+        # Commands to execute on the miner
+        install_hashcat_command = "if ! command -v hashcat &> /dev/null; then sudo apt-get update && sudo apt-get install -y hashcat; fi"
+
+        # Prepare hashcat command parameters
+        hashcat_path = "hashcat"
+        hashcat_workload_profile = "3"
+        hashcat_extended_options = "--machine-readable --quiet"
+
+        hash_input = f"{_hash}:{_salt}"
+
+        # Build the hashcat command
+        hashcat_command = (
+            f"{hashcat_path} '{hash_input}' -a 3 -D 2 -m {mode} -1 '{chars}' '{mask}' "
+            f"-w {hashcat_workload_profile} {hashcat_extended_options}"
         )
+
+        commands = [
+            install_hashcat_command,
+            hashcat_command,
+        ]
+
+        # Establish SSH connection and execute commands
+        start_time = time.time()
+        results = execute_ssh_command(host, port, username, password, commands)
         elapsed_time = time.time() - start_time
-        response_password = response.get("password", "")
+
+        # Process the result from the hashcat command
+        challenge_result = None
+        for result in results:
+            if hashcat_command in result['command']:
+                output = result.get('output', '').strip()
+                error = result.get('error', '').strip()
+                exit_status = result.get('exit_status', None)
+
+                if exit_status == 0 or exit_status == 3:
+                    # Parse the output to get the password
+                    for line in output.splitlines():
+                        if line.strip():
+                            parts = line.strip().split(':')
+                            if len(parts) >= 4:
+                                challenge_result = parts[3]
+                                break
+                    if not challenge_result:
+                        bt.logging.warning(f"No password found in output for miner {uid}")
+                else:
+                    bt.logging.warning(f"Hashcat failed with exit code {exit_status} for miner {uid}. Error: {error}")
+                break
+
+        # Evaluate the challenge result
+        response_password = challenge_result
         hashed_response = gen_hash(response_password, _salt)[0] if response_password else ""
-        success = True if _hash == hashed_response else False
+        success = _hash == hashed_response
+
+        # Save the results as before
         result_data = {
             "ss58_address": axon.hotkey,
             "success": success,
@@ -603,7 +682,7 @@ class Validator:
             "difficulty": difficulty,
         }
         with self.lock:
-            self.pow_responses[uid] = response
+            self.pow_responses[uid] = response_password
             self.new_pow_benchmark[uid] = result_data
 
     def execute_miner_checking_request(self, uid, axon: bt.AxonInfo):
