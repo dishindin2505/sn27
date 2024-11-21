@@ -1,4 +1,3 @@
-
 import paramiko
 import bittensor as bt
 
@@ -15,7 +14,8 @@ def execute_ssh_command(host, port, username, password, commands):
             stdin, stdout, stderr = ssh_client.exec_command(command)
             output = stdout.read().decode()
             error = stderr.read().decode()
-            results.append({'command': command, 'output': output, 'error': error})
+            exit_status = stdout.channel.recv_exit_status()
+            results.append({'command': command, 'output': output, 'error': error, 'exit_status': exit_status})
             bt.logging.info(f"Executed command: {command}")
 
         return results
