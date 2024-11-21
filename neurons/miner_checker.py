@@ -9,6 +9,7 @@ import bittensor as bt
 import paramiko  # For SSH functionality
 from compute.protocol import Allocate  # Allocate is still needed for the actual allocation process
 from compute.wandb.wandb import ComputeWandb  # Importing ComputeWandb
+from ssh_utils import execute_ssh_command  # Import the new SSH utility
 
 class MinerChecker:
     def __init__(self, config):
@@ -100,8 +101,15 @@ class MinerChecker:
                 private_key = private_key.encode("utf-8") 
                 decrypted_info_str = rsa.decrypt_data(private_key, base64.b64decode(response["info"])) 
                 info = json.loads(decrypted_info_str)
-                # Use the SSH check function
-                is_ssh_access = self.check_ssh_login(axon.ip, info['port'], info['username'], info['password']) 
+                # Use the SSH utility function instead of check_ssh_login
+                commands = ['echo "Hello, World!"']  # Commands to execute on the miner
+                ssh_results = execute_ssh_command(axon.ip, info['port'], info['username'], info['password'], commands)
+
+                if ssh_results is None:
+                    self.penalize_miner(axon.hotkey, "SSH_ACCESS_FAILED", "Failed to execute SSH commands")
+                else:
+                    bt.logging.info(f"SSH commands executed successfully for {axon.hotkey}")
+                    # Process ssh_results if needed
             else:
                 # Penalize if the allocation failed
                 self.penalize_miner(axon.hotkey, "ALLOCATION_FAILED", "Allocation failed during resource allocation") 
@@ -138,26 +146,6 @@ class MinerChecker:
         if not is_ssh_access:
             # Penalize if SSH access fails
             self.penalize_miner(axon.hotkey, "SSH_ACCESS_DISABLED", "Failed SSH access")
-
-    def check_ssh_login(self, host, port, username, password): 
-        """Check SSH login using Paramiko.""" 
-        try:
-            ssh_client = paramiko.SSHClient()
-            ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy()) 
-            ssh_client.connect(hostname=host, port=port, username=username, password=password, timeout=10) 
-            bt.logging.info(f"SSH login successful for {host}") 
-            return True
-        except paramiko.AuthenticationException: 
-            bt.logging.error(f"Authentication failed for {host}")
-            return False 
-        except paramiko.SSHException as ssh_exception: 
-            bt.logging.error(f"Unable to establish SSH connection: {ssh_exception}") 
-            return False
-        except Exception as e:
-            bt.logging.error(f"Exception in connecting to the server: {e}") 
-            return False 
-        finally:
-            ssh_client.close()
 
 def get_config():
     """Set up configuration using argparse.""" 
