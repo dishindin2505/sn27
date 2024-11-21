@@ -31,11 +31,10 @@ from compute import (
     validator_permit_stake,
     miner_priority_specs,
     miner_priority_allocate,
-    miner_priority_challenge,
     TRUSTED_VALIDATORS_HOTKEYS,
 )
 from compute.axon import ComputeSubnetAxon, ComputeSubnetSubtensor
-from compute.protocol import Specs, Allocate, Challenge
+from compute.protocol import Specs, Allocate
 from compute.utils.math import percent
 from compute.utils.parser import ComputeArgPaser
 from compute.utils.socket import check_port
@@ -45,7 +44,6 @@ from compute.utils.subtensor import (
     calculate_next_block_time,
 )
 from compute.utils.version import (
-    check_hashcat_version,
     try_update,
     version2number,
     get_remote_version,
@@ -69,7 +67,7 @@ from neurons.Miner.container import (
 from compute.wandb.wandb import ComputeWandb
 from neurons.Miner.allocate import check_allocation, register_allocation
 from neurons.Miner.http_server import start_server, stop_server
-from neurons.Miner.pow import check_cuda_availability, run_miner_pow
+from neurons.Miner.pow import check_cuda_availability
 
 # from neurons.Miner.specs import RequestSpecsProcessor
 from neurons.Validator.script import check_docker_availability
@@ -166,13 +164,6 @@ class Miner:
 
         check_cuda_availability()
 
-        # Step 3: Set up hashcat for challenges
-        self.hashcat_path = self.config.miner_hashcat_path
-        self.hashcat_workload_profile = self.config.miner_hashcat_workload_profile
-        self.hashcat_extended_options = self.config.miner_hashcat_extended_options
-
-        check_hashcat_version(hashcat_path=self.hashcat_path)
-
         self.uids: list = self.metagraph.uids.tolist()
 
         self.sync_status()
@@ -231,15 +222,6 @@ class Miner:
             forward_fn=self.allocate,
             blacklist_fn=self.blacklist_allocate,
             priority_fn=self.priority_allocate,
-        ).attach(
-            forward_fn=self.challenge,
-            blacklist_fn=self.blacklist_challenge,
-            priority_fn=self.priority_challenge,
-            # Disable the spec query and replaced with WanDB
-            # ).attach(
-            #      forward_fn=self.specs,
-            #      blacklist_fn=self.blacklist_specs,
-            #      priority_fn=self.priority_specs,
         )
 
         # Serve passes the axon information to the network + netuid we are hosting on.
@@ -331,7 +313,7 @@ class Miner:
                     self.init_axon()
 
     def base_blacklist(
-        self, synapse: typing.Union[Specs, Allocate, Challenge]
+        self, synapse: typing.Union[Specs, Allocate]
     ) -> typing.Tuple[bool, str]:
         hotkey = synapse.dendrite.hotkey
         synapse_type = type(synapse).__name__
@@ -375,7 +357,7 @@ class Miner:
         )
         return False, "Hotkey recognized!"
 
-    def base_priority(self, synapse: typing.Union[Specs, Allocate, Challenge]) -> float:
+    def base_priority(self, synapse: typing.Union[Specs, Allocate]) -> float:
         caller_uid = self._metagraph.hotkeys.index(
             synapse.dendrite.hotkey
         )  # Get the caller index.
@@ -484,42 +466,6 @@ class Miner:
                 synapse.output = result
         self.update_allocation(synapse)
         synapse.output["port"] = int(self.config.ssh.port)
-        return synapse
-
-    # The blacklist function decides if a request should be ignored.
-    def blacklist_challenge(self, synapse: Challenge) -> typing.Tuple[bool, str]:
-        return self.base_blacklist(synapse)
-
-    # The priority function determines the order in which requests are handled.
-    # More valuable or higher-priority requests are processed before others.
-    def priority_challenge(self, synapse: Challenge) -> float:
-        return self.base_priority(synapse) + miner_priority_challenge
-
-    # This is the Challenge function, which decides the miner's response to a valid, high-priority request.
-    def challenge(self, synapse: Challenge) -> Challenge:
-        if synapse.challenge_difficulty <= 0:
-            bt.logging.warning(
-                f"{synapse.dendrite.hotkey}: Challenge received with a difficulty <= 0 - it can not be solved."
-            )
-            return synapse
-
-        v_id = synapse.dendrite.hotkey[:8]
-        run_id = (
-            f"{v_id}/{synapse.challenge_difficulty}/{synapse.challenge_hash[10:20]}"
-        )
-
-        result = run_miner_pow(
-            run_id=run_id,
-            _hash=synapse.challenge_hash,
-            salt=synapse.challenge_salt,
-            mode=synapse.challenge_mode,
-            chars=synapse.challenge_chars,
-            mask=synapse.challenge_mask,
-            hashcat_path=self.hashcat_path,
-            hashcat_workload_profile=self.hashcat_workload_profile,
-            hashcat_extended_options=self.hashcat_extended_options,
-        )
-        synapse.output = result
         return synapse
 
     def get_updated_validator(self):
