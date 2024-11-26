@@ -355,7 +355,7 @@ class ComputeWandb:
                 # Access the run's configuration
                 run_config = run.config
                 hotkey = run_config.get('hotkey')
-                penalized_keys = run_config.get('penalized_hotkeys')
+                penalized_keys = run_config.get('penalized_hotkeys_checklist')
 
                 valid_validator_hotkey = hotkey in valid_validator_hotkeys
 

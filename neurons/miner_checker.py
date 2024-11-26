@@ -45,6 +45,9 @@ class MinerChecker:
                 if axon.hotkey in self.allocated_hotkeys: 
                     bt.logging.info(f"Skipping allocated miner: {axon.hotkey}")
                     continue  # skip this miner since it's allocated
+                if self.metagraph.total_stake[i] >= 1.024e3:
+                    bt.logging.info(f"Skipping validator: {axon.hotkey}")
+                    continue  # skip this validator
 
                 thread = threading.Thread(target=self.miner_checking_thread, args=(axon,), name=f"th_miner_checking_request-{axon.hotkey}", daemon=True)
                 self.threads.append(thread)
