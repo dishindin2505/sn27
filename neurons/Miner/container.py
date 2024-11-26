@@ -97,18 +97,47 @@ def run_container(cpu_usage, ram_usage, hard_disk_usage, gpu_usage, public_key, 
             docker_appendix = "echo 'Hello World!'"
 
         # Step 1: Build the Docker image with an SSH server
+
         dockerfile_content = (
             """
             FROM {}
-            RUN apt-get update && apt-get install -y openssh-server
-            RUN mkdir -p /run/sshd && echo 'root:'{}'' | chpasswd
+            # Install SSH server and prerequisites
+            RUN apt-get update && apt-get install -y \
+                openssh-server \
+                apt-transport-https \
+                ca-certificates \
+                curl \
+                gnupg \
+                lsb-release \
+                --no-install-recommends && \
+                rm -rf /var/lib/apt/lists/*
+
+            # Configure SSH
+            RUN mkdir -p /run/sshd && echo 'root:{}' | chpasswd
             RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
                 sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
                 sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config && \
                 sed -i 's/#ListenAddress 0.0.0.0/ListenAddress 0.0.0.0/' /etc/ssh/sshd_config
-            RUN {} 
+
+            # Add Docker's GPG key and repository
+            RUN mkdir -p /etc/apt/keyrings && \
+                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+                echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+            # Install Docker
+            RUN apt-get update && apt-get install -y \
+                docker-ce \
+                docker-ce-cli \
+                containerd.io \
+                docker-buildx-plugin \
+                docker-compose-plugin && \
+                rm -rf /var/lib/apt/lists/*
+
+            # Set up authorized keys for SSH
             RUN mkdir -p /root/.ssh/ && echo '{}' > /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys
-            CMD ["/usr/sbin/sshd", "-D"]
+
+            # Start Docker Daemon and SSH server
+            CMD dockerd & /usr/sbin/sshd -D
             """.format(docker_image, password, docker_appendix, docker_ssh_key)
         )
 
@@ -136,11 +165,13 @@ def run_container(cpu_usage, ram_usage, hard_disk_usage, gpu_usage, public_key, 
             name=container_name,
             detach=True,
             device_requests=device_requests,
-            environment=["NVIDIA_VISIBLE_DEVICES=all"],
+            environment=["DOCKER_TLS_CERTDIR=/certs", "NVIDIA_VISIBLE_DEVICES=all"],
             ports={22: docker_ssh_port},
             init=True,
             restart_policy={"Name": "on-failure", "MaximumRetryCount": 3},
+            privileged=True,  # Required for DinD
 #            volumes={ docker_volume: {'bind': '/root/workspace/', 'mode': 'rw'}},
+            volumes={"/var/lib/docker": {"bind": "/var/lib/docker", "mode": "rw"}},
         )
 
         # Check the status to determine if the container ran successfully
