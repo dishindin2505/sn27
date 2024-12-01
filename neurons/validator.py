@@ -34,6 +34,7 @@ import time
 
 from compute.utils.socket import check_port
 import cryptography
+from neurons.ssh_utils import execute_ssh_command, get_specs
 import torch
 from cryptography.fernet import Fernet
 from torch._C._te import Tensor
@@ -656,86 +657,91 @@ class Validator:
                     bt.logging.info(f"Debug {Allocate.__name__} - status of Checking allocation - {status} {uid} - SSH access is disabled")
                     self.penalized_hotkeys_checklist.append({"hotkey": axon.hotkey, "status_code": "SSH_ACCESS_DISABLED", "description": "It can not access to the server via ssh"})               
 
-    def execute_specs_request(self):
-        if len(self.queryable_for_specs) > 0:
-            return
-        else:
-            # Miners to query this block
-            self.queryable_for_specs = self.queryable.copy()
+    
+    def sync_specs(self):
+        self.threads = []
+        for i in range(0, len(self.uids), self.validator_specs_batch_size):
+            for _uid in self.uids[i : i + self.validator_specs_batch_size]:
+                try:
+                    axon = self._queryable_uids[_uid]
+                    self.threads.append(
+                        threading.Thread(
+                            target=self.execute_specs_request,
+                            args=(_uid, axon),
+                            name=f"th_execute_specs_request-{_uid}",
+                            daemon=True,
+                        )
+                    )
+                except KeyError:
+                    continue
 
-        bt.logging.info(f"💻 Initialisation of the {Specs.__name__} queries...")
-        # # Prepare app_data for benchmarking
-        # # Generate secret key for app
-        secret_key = Fernet.generate_key()
-        cipher_suite = Fernet(secret_key)
-        # # Compile the script and generate an exe.
-        ag.run(secret_key)
-        try:
-            main_dir = os.path.dirname(os.path.abspath(__file__))
-            file_name = os.path.join(main_dir, "Validator/dist/script")
-            # Read the exe file and save it to app_data.
-            with open(file_name, "rb") as file:
-                # Read the entire content of the EXE file
-                app_data = file.read()
-        except Exception as e:
-            bt.logging.error(f"{e}")
-            return
+        for thread in self.threads:
+            thread.start()
 
+        for thread in self.threads:
+            thread.join()
+        
+        self.finalized_specs_once = True
+
+    def execute_specs_request(self, uid, axon: bt.AxonInfo):
         results = {}
-        while len(self.queryable_for_specs) > 0:
-            uids = list(self.queryable_for_specs.keys())
-            queryable_for_specs_uids = random.sample(uids, self.validator_specs_batch_size) if len(uids) > self.validator_specs_batch_size else uids
-            queryable_for_specs_uid = []
-            queryable_for_specs_axon = []
-            queryable_for_specs_hotkey = []
+        wallet = bt.wallet(config=self.config)
+        dendrite = bt.dendrite(wallet=wallet)
+        private_key, public_key = rsa.generate_key_pair() 
+        device_requirement = {"cpu": {"count": 1}, "gpu": {}, "hard_disk": {"capacity": 1073741824}, "ram": {"capacity": 1073741824}}
 
-            for uid, axon in self.queryable_for_specs.items():
-                if uid in queryable_for_specs_uids:
-                    queryable_for_specs_uid.append(uid)
-                    queryable_for_specs_axon.append(axon)
-                    queryable_for_specs_hotkey.append(axon.hotkey)
+        try:
+            # Query the miners for benchmarking
+            bt.logging.info(f"💻 Hardware list of uids queried: {uid}")
+            response = dendrite.query(axon, Allocate(timeline=1, device_requirement=device_requirement, checking=False, public_key=public_key), timeout=60)
+            if response and response["status"] is True: 
+                allocation_status = True 
+                bt.logging.info(f"Successfully allocated miner {axon.hotkey}") 
+                private_key = private_key.encode("utf-8") 
+                decrypted_info_str = rsa.decrypt_data(private_key, base64.b64decode(response["info"])) 
+                info = json.loads(decrypted_info_str) 
+                ssh_results = get_specs(axon["ip"], info["port"], info["username"], info["password"])
 
-            for uid in queryable_for_specs_uids:
-                del self.queryable_for_specs[uid]
+                if ssh_results:
+                    results[uid] = (axon.hotkey, {})
+                else:
+                    results[uid] = (axon.hotkey, {})
 
+        except Exception as e:
+            bt.logging.error(f"Error during allocation for {axon.hotkey}: {e}")
+            self.penalize_miner(axon.hotkey, "ALLOCATION_ERROR", f"Error during allocation: {str(e)}")
+
+        # Deallocate resources if allocated, with a max retry count of 3
+        retry_count = 0 
+        max_retries = 3 
+        while allocation_status and retry_count < max_retries: 
             try:
-                # Query the miners for benchmarking
-                bt.logging.info(f"💻 Hardware list of uids queried: {queryable_for_specs_uid}")
-                responses = self.dendrite.query(queryable_for_specs_axon, Specs(specs_input=repr(app_data)), timeout=specs_timeout)
-
-                # Format responses and save them to benchmark_responses
-                for index, response in enumerate(responses):
-                    try:
-                        if response:
-                            binary_data = ast.literal_eval(response)  # Convert str to binary data
-                            decrypted = cipher_suite.decrypt(binary_data)  # Decrypt str to binary data
-                            decoded_data = json.loads(decrypted.decode())  # Convert data to object
-                            results[queryable_for_specs_uid[index]] = (queryable_for_specs_hotkey[index], decoded_data)
-                        else:
-                            results[queryable_for_specs_uid[index]] = (queryable_for_specs_hotkey[index], {})
-                    except cryptography.fernet.InvalidToken:
-                        bt.logging.warning(f"{queryable_for_specs_hotkey[index]} - InvalidToken")
-                        results[queryable_for_specs_uid[index]] = (queryable_for_specs_hotkey[index], {})
-                    except Exception as _:
-                        traceback.print_exc()
-                        results[queryable_for_specs_uid[index]] = (queryable_for_specs_hotkey[index], {})
-
-            except Exception as e:
-                traceback.print_exc()
+                # Deallocation query
+                deregister_response = dendrite.query(axon, Allocate(timeline=0, checking=False, public_key=public_key), timeout=60) 
+                if deregister_response and deregister_response["status"] is True: 
+                    allocation_status = False
+                    bt.logging.info(f"Deallocated miner {axon.hotkey}") 
+                    break 
+                else: 
+                    retry_count += 1
+                    bt.logging.error(f"Failed to deallocate miner {axon.hotkey} (attempt {retry_count}/{max_retries})") 
+                    if retry_count >= max_retries: 
+                        bt.logging.error(f"Max retries reached for deallocating miner {axon.hotkey}.")
+                    time.sleep(5)
+            except Exception as e: 
+                retry_count += 1 
+                bt.logging.error(f"Error while trying to deallocate miner {axon.hotkey} (attempt {retry_count}/{max_retries}): {e}") 
+                if retry_count >= max_retries:
+                    bt.logging.error(f"Max retries reached for deallocating miner {axon.hotkey}.") 
+                time.sleep(5)
 
         update_miner_details(self.db, list(results.keys()), list(results.values()))
         bt.logging.info(f"✅ Hardware list responses:")
 
-        # Hardware list response hotfix 1.3.11
         db = ComputeDb()
         hardware_details = get_miner_details(db)
         for hotkey, specs in hardware_details.items():
             bt.logging.info(f"{hotkey} - {specs}")
-        """
-        for hotkey, specs in results.values():
-            bt.logging.info(f"{hotkey} - {specs}")
-        """
-        self.finalized_specs_once = True
 
     def get_specs_wandb(self):
 
@@ -743,14 +749,14 @@ class Validator:
 
         specs_dict = self.wandb.get_miner_specs(self._queryable_uids) 
         # Update the local db with the data from wandb
-        update_miner_details(self.db, list(specs_dict.keys()), list(specs_dict.values()))
+        # update_miner_details(self.db, list(specs_dict.keys()), list(specs_dict.values()))
 
         # Log the hotkey and specs
-        bt.logging.info(f"✅ Hardware list responses:")
+        bt.logging.info(f"✅ Hardware list responses from wandb:")
         for hotkey, specs in specs_dict.values():
             bt.logging.info(f"{hotkey} - {specs}")
 
-        self.finalized_specs_once = True
+        # self.finalized_specs_once = True
 
     def set_weights(self):
         # Remove all negative scores and attribute them 0.
@@ -877,8 +883,8 @@ class Validator:
                         if not hasattr(self, "_queryable_uids"):
                             self._queryable_uids = self.get_queryable()
 
-                        # self.loop.run_in_executor(None, self.execute_specs_request) replaced by wandb query.
                         self.get_specs_wandb()
+                        self.sync_specs() # Query specs by ssh access
 
                     # Perform miner checking
                     if self.current_block % block_next_miner_checking == 0 or block_next_miner_checking < self.current_block:
