@@ -176,17 +176,6 @@ linux_install_compute_subnet() {
     exit_on_error $?
 }
 
-linux_install_hashcat() {
-    wget https://hashcat.net/files/hashcat-6.2.6.tar.gz
-    tar xzvf hashcat-6.2.6.tar.gz
-    cd hashcat-6.2.6/
-    sudo make
-    sudo make install
-    export PATH=$PATH:/usr/local/bin/
-    echo "export PATH=$PATH">>~/.bashrc
-    cd ~
-}
-
 linux_install_nvidia_cuda() {
     wget https://developer.download.nvidia.com/compute/cuda/12.4.0/local_installers/cuda-repo-ubuntu2204-12-4-local_12.4.0-550.54.14-1_amd64.deb
     sudo dpkg -i cuda-repo-ubuntu2204-12-4-local_12.4.0-550.54.14-1_amd64.deb
