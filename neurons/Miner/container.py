@@ -284,7 +284,7 @@ def build_sample_container():
 
         for image in images:
             if image.tags:
-                if image_name in image.tags[0]:
+                if image_name_base in image.tags[0]:
                     bt.logging.info("Sample container image already exists.")
                     return {"status": True}
 
