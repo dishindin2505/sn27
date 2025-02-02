@@ -3,7 +3,7 @@ set -u
 set -o history -o histexpand
 
 # 1_cuda_installer.sh
-# This script installs Docker, NVIDIA drivers, NVIDIA Docker support, and the CUDA Toolkit.
+# This script installs Docker, NVIDIA drivers, NVIDIA Docker support, the CUDA Toolkit, and Bittensor.
 # It will automatically reboot your machine after successful installation.
 # Please save your work—your system will reboot at the end.
 
@@ -27,13 +27,12 @@ if [[ "$(uname)" != "Linux" ]]; then
   abort "This installer only supports Linux."
 fi
 
-ohai "WARNING: This script will install Docker, NVIDIA drivers, NVIDIA Docker support, and the CUDA Toolkit, then reboot your machine."
+ohai "WARNING: This script will install Docker, NVIDIA drivers, NVIDIA Docker support, the CUDA Toolkit, and Bittensor, then reboot your machine."
 wait_for_user
 
 ##############################################
 # Determine the proper home directory
 ##############################################
-# If running with sudo, SUDO_USER will be set; use that user's home directory.
 if [[ -n "${SUDO_USER:-}" ]]; then
   USER_NAME="$SUDO_USER"
   HOME_DIR=$(eval echo "~$SUDO_USER")
@@ -54,7 +53,6 @@ sudo install -m 0755 -d /etc/apt/keyrings
 sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc || abort "Failed to download Docker GPG key."
 sudo chmod a+r /etc/apt/keyrings/docker.asc
 
-# Load OS release information
 . /etc/os-release || abort "Cannot determine OS version."
 DOCKER_REPO="deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable"
 echo "$DOCKER_REPO" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
@@ -63,7 +61,6 @@ sudo apt-get update || abort "Failed to update package lists after adding Docker
 ohai "Installing Docker packages..."
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || abort "Docker installation failed."
 
-# Add the current user to the docker group
 ohai "Adding user ${USER_NAME} to docker group..."
 sudo usermod -aG docker "$USER_NAME" || abort "Failed to add user to docker group."
 
@@ -74,12 +71,8 @@ sudo apt-get install -y at || abort "Failed to install 'at'."
 # Install NVIDIA Docker support
 ##############################################
 ohai "Installing NVIDIA Docker support..."
-
-# Add NVIDIA Docker GPG key using gpg --dearmor (avoids using the deprecated apt-key)
 curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/nvidia-docker.gpg > /dev/null || abort "Failed to add NVIDIA Docker GPG key."
 
-# Determine the correct NVIDIA distribution identifier.
-# For Ubuntu 22.04 (codename "jammy"), use "ubuntu22.04" since that's what NVIDIA expects.
 UBUNTU_CODENAME=$(lsb_release -cs)
 if [[ "$UBUNTU_CODENAME" == "jammy" ]]; then
   NVIDIA_DIST="ubuntu22.04"
@@ -98,7 +91,6 @@ ohai "NVIDIA Docker support installed."
 if command -v nvcc >/dev/null 2>&1; then
   ohai "CUDA is already installed; skipping CUDA installation."
 else
-  # For Ubuntu 22.04 (jammy) or 24.04 (lunar)
   if [[ "$VERSION_CODENAME" == "jammy" ]]; then
     ohai "Installing CUDA Toolkit 12.8 for Ubuntu 22.04..."
     sudo apt-get update
@@ -126,12 +118,7 @@ else
     exit 1
   fi
 
-  ##############################################
-  # Configure CUDA environment variables
-  ##############################################
   ohai "Configuring CUDA environment variables in ${HOME_DIR}/.bashrc..."
-  
-  # Append the CUDA environment configuration to the user's .bashrc if it's not already present.
   if ! grep -q "CUDA configuration added by 1_cuda_installer.sh" "${HOME_DIR}/.bashrc"; then
     {
       echo ""
@@ -147,6 +134,23 @@ else
   ohai "CUDA Toolkit 12.8 installed successfully!"
 fi
 
-ohai "Installation of Docker, NVIDIA components, and CUDA is complete."
+##############################################
+# Install Bittensor and Warn About Wallet Creation
+##############################################
+ohai "Installing Bittensor..."
+# Use the non-root user’s environment for pip installation.
+sudo -H -u "$USER_NAME" pip3 install --upgrade pip || abort "Failed to upgrade pip."
+sudo -H -u "$USER_NAME" pip3 install bittensor || abort "Failed to install Bittensor."
+ohai "Bittensor installed successfully."
+
+ohai "IMPORTANT: After reboot, please create a wallet pair by running the following commands in your terminal:"
+echo "    btcli new_coldkey"
+echo "    btcli new_hotkey"
+echo "These commands are required before running the Compute-Subnet installer (script 2)."
+
+##############################################
+# Final Message and Reboot
+##############################################
+ohai "Installation of Docker, NVIDIA components, CUDA, and Bittensor is complete."
 ohai "A reboot is required to finalize installations. Rebooting now..."
 sudo reboot
