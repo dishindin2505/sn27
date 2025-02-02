@@ -3,7 +3,8 @@ set -u
 set -o history -o histexpand
 
 # 1_cuda_installer.sh
-# This script installs Docker, NVIDIA drivers, NVIDIA Docker support, the CUDA Toolkit, and Bittensor.
+# This script installs Docker, NVIDIA drivers, NVIDIA Docker support, the CUDA Toolkit,
+# and Bittensor (using the official one-line installer).
 # It will automatically reboot your machine after successful installation.
 # Please save your work—your system will reboot at the end.
 
@@ -27,7 +28,7 @@ if [[ "$(uname)" != "Linux" ]]; then
   abort "This installer only supports Linux."
 fi
 
-ohai "WARNING: This script will install Docker, NVIDIA drivers, NVIDIA Docker support, the CUDA Toolkit, and Bittensor, then reboot your machine."
+ohai "WARNING: This script will install Docker, NVIDIA drivers, NVIDIA Docker support, the CUDA Toolkit, and Bittensor (via the official one-line installer), then reboot your machine."
 wait_for_user
 
 ##############################################
@@ -118,6 +119,9 @@ else
     exit 1
   fi
 
+  ##############################################
+  # Configure CUDA environment variables
+  ##############################################
   ohai "Configuring CUDA environment variables in ${HOME_DIR}/.bashrc..."
   if ! grep -q "CUDA configuration added by 1_cuda_installer.sh" "${HOME_DIR}/.bashrc"; then
     {
@@ -135,22 +139,20 @@ else
 fi
 
 ##############################################
-# Install Bittensor and Warn About Wallet Creation
+# Install Bittensor using the official one-line installer
 ##############################################
-ohai "Installing Bittensor..."
-# Use the non-root user’s environment for pip installation.
-sudo -H -u "$USER_NAME" pip3 install --upgrade pip || abort "Failed to upgrade pip."
-sudo -H -u "$USER_NAME" pip3 install bittensor || abort "Failed to install Bittensor."
+ohai "Installing Bittensor using the official installer script..."
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/opentensor/bittensor/master/scripts/install.sh)" || abort "Bittensor installation failed."
 ohai "Bittensor installed successfully."
 
-ohai "IMPORTANT: After reboot, please create a wallet pair by running the following commands in your terminal:"
-echo "    btcli new_coldkey"
-echo "    btcli new_hotkey"
-echo "These commands are required before running the Compute-Subnet installer (script 2)."
+ohai "IMPORTANT: After reboot, please create a wallet pair by running:"
+echo "    btcli w new_coldkey"
+echo "    btcli w new_hotkey"
 
 ##############################################
 # Final Message and Reboot
 ##############################################
 ohai "Installation of Docker, NVIDIA components, CUDA, and Bittensor is complete."
 ohai "A reboot is required to finalize installations. Rebooting now..."
+ohai "Remember to create a wallet pair and fund it before running script 2."
 sudo reboot
