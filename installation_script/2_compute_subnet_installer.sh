@@ -221,6 +221,7 @@ cat > "$PM2_CONFIG_FILE" <<EOF
     "interpreter": "${VENV_DIR}/bin/python3",
     "args": "--netuid ${NETUID} --subtensor.network ${SUBTENSOR_NETWORK} --wallet.name ${COLDKEY_WALLET} --wallet.hotkey ${HOTKEY_WALLET} --axon.port ${axon_port} --logging.debug --miner.blacklist.force_validator_permit --auto_update yes",
     "env": {
+      "HOME": "${HOME_DIR}",
       "PATH": "/usr/local/cuda-12.8/bin:${CURRENT_PATH}",
       "LD_LIBRARY_PATH": "/usr/local/cuda-12.8/lib64:${CURRENT_LD_LIBRARY_PATH}"
     },
