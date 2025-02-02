@@ -56,11 +56,13 @@ if [ -z "${VIRTUAL_ENV:-}" ] || [ "$VIRTUAL_ENV" != "$VENV_DIR" ]; then
          source "$VENV_DIR/bin/activate"
     else
          ohai "Virtual environment not found. Creating a new virtual environment at ${VENV_DIR}..."
-         # Check if the venv module is available; if not, attempt to install it.
-         if ! python3 -m venv --help > /dev/null 2>&1; then
-             ohai "python3-venv module not available. Installing python3-venv..."
+         # Check if ensurepip is available; if not, install the appropriate venv package.
+         if ! python3 -m ensurepip --version > /dev/null 2>&1; then
+             ohai "ensurepip is not available. Installing the appropriate python-venv package..."
+             # Get the current python version (e.g., "3.10")
+             py_ver=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
              sudo apt-get update || abort "Failed to update package lists."
-             sudo apt-get install -y python3-venv || abort "Failed to install python3-venv."
+             sudo apt-get install -y python${py_ver}-venv || abort "Failed to install python${py_ver}-venv."
          fi
          python3 -m venv "$VENV_DIR" || abort "Failed to create virtual environment."
          ohai "Activating virtual environment..."
