@@ -31,7 +31,7 @@ fi
 ##############################################
 # Define Remaining Key Variables
 ##############################################
-# Assume the script is part of the Compute-Subnet repository.
+# Assume the script is part of the compute‑subnet repository.
 # Set CS_PATH to the current directory.
 CS_PATH="$(pwd)"
 
@@ -43,7 +43,7 @@ if [ ! -f "$CS_PATH/setup.py" ] && [ ! -f "$CS_PATH/pyproject.toml" ]; then
          cd "$(dirname "$CS_PATH")" || abort "Failed to change directory to repository root"
          CS_PATH="$(pwd)"
     else
-         abort "Repository root not found. Please run this script from within the compute-subnet repository."
+         abort "Repository root not found. Please run this script from within the compute‑subnet repository."
     fi
 fi
 
@@ -52,8 +52,8 @@ VENV_DIR="${HOME_DIR}/venv"
 
 cat << "EOF"
 
-   NI Compute Subnet 27 Installer - Compute Subnet Setup
-   (This script is running from within the Compute-Subnet repository)
+   NI compute‑subnet 27 Installer - compute‑subnet Setup
+   (This script is running from within the compute‑subnet repository)
 
 EOF
 
@@ -90,17 +90,25 @@ sudo apt-get update || abort "Failed to update package lists."
 sudo apt-get install -y python3 python3-pip python3-venv build-essential dkms linux-headers-$(uname -r) || abort "Failed to install prerequisites."
 
 ##############################################
-# Upgrade pip and Install Compute-Subnet Dependencies
+# Upgrade pip and Install compute‑subnet Dependencies
 ##############################################
 ohai "Upgrading pip in the virtual environment..."
 pip install --upgrade pip || abort "Failed to upgrade pip in virtual environment."
 
-ohai "Installing Compute-Subnet dependencies..."
+ohai "Installing compute‑subnet dependencies..."
 pip install -r requirements.txt || abort "Failed to install base requirements."
 pip install --no-deps -r requirements-compute.txt || abort "Failed to install compute requirements."
 
-ohai "Installing Compute-Subnet in editable mode..."
-pip install -e . || abort "Editable install of Compute-Subnet failed."
+ohai "Installing compute‑subnet in editable mode..."
+pip install -e . || abort "Editable install of compute‑subnet failed."
+
+##############################################
+# Ensure PyTorch is Installed
+##############################################
+if ! python -c "import torch" &>/dev/null; then
+    ohai "PyTorch is not installed. Installing torch, torchvision, and torchaudio..."
+    pip install torch torchvision torchaudio || abort "Failed to install PyTorch packages."
+fi
 
 ##############################################
 # Install Extra OpenCL Libraries
@@ -215,7 +223,9 @@ cat > "$PM2_CONFIG_FILE" <<EOF
     "env": {
       "PATH": "/usr/local/cuda-12.8/bin:${CURRENT_PATH}",
       "LD_LIBRARY_PATH": "/usr/local/cuda-12.8/lib64:${CURRENT_LD_LIBRARY_PATH}"
-    }
+    },
+    "out_file": "${CS_PATH}/pm2_out.log",
+    "error_file": "${CS_PATH}/pm2_error.log"
   }]
 }
 EOF
@@ -229,7 +239,7 @@ ohai "Starting miner process with PM2..."
 pm2 start "$PM2_CONFIG_FILE" || abort "Failed to start PM2 process."
 
 ohai "Miner process started."
-echo "You can view logs using: pm2 logs subnet27_miner"
+echo "You can view logs using: pm2 logs subnet27_miner (or check ${CS_PATH}/pm2_out.log and ${CS_PATH}/pm2_error.log)"
 echo "Ensure that your chosen hotkey is registered on chain (using btcli register)."
 echo "The miner process will automatically begin working once your hotkey is registered on chain."
 echo
