@@ -19,7 +19,7 @@ USER_NAME=${SUDO_USER:-$(whoami)}
 HOME_DIR=$(eval echo "~${USER_NAME}")
 DEFAULT_WALLET_DIR="${HOME_DIR}/.bittensor/wallets"
 
-if [ ! -d "${DEFAULT_WALLET_DIR}" ] || [ -z "$(ls -A ${DEFAULT_WALLET_DIR} 2>/dev/null)" ]; then
+if [ ! -d "${DEFAULT_WALLET_DIR}" ] || [ -z "$(ls -A "${DEFAULT_WALLET_DIR}" 2>/dev/null)" ]; then
   ohai "WARNING: No Bittensor wallets detected in ${DEFAULT_WALLET_DIR}."
   echo "Before running this installer, please create a wallet pair by executing the following commands:"
   echo "    btcli w new_coldkey"
@@ -56,6 +56,12 @@ if [ -z "${VIRTUAL_ENV:-}" ] || [ "$VIRTUAL_ENV" != "$VENV_DIR" ]; then
          source "$VENV_DIR/bin/activate"
     else
          ohai "Virtual environment not found. Creating a new virtual environment at ${VENV_DIR}..."
+         # Check if the venv module is available; if not, attempt to install it.
+         if ! python3 -m venv --help > /dev/null 2>&1; then
+             ohai "python3-venv module not available. Installing python3-venv..."
+             sudo apt-get update || abort "Failed to update package lists."
+             sudo apt-get install -y python3-venv || abort "Failed to install python3-venv."
+         fi
          python3 -m venv "$VENV_DIR" || abort "Failed to create virtual environment."
          ohai "Activating virtual environment..."
          # shellcheck disable=SC1090
