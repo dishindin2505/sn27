@@ -125,59 +125,17 @@ sudo apt-get install -y npm || abort "Failed to install npm."
 sudo npm install -g pm2 || abort "Failed to install PM2."
 
 ##############################################
-# Configuration: Ask User for Miner Setup Parameters
+# Wallet Selection: Choose Coldkey and Hotkey
 ##############################################
-echo
-echo "Please configure your miner setup."
-echo "-------------------------------------"
-
-# Network selection: Netuid is either 27 (Main) or 15 (Test)
-echo "Select the Bittensor network:"
-echo "  1) Main Network (netuid 27)"
-echo "  2) Test Network (netuid 15)"
-read -rp "Enter your choice [1 or 2]: " network_choice
-if [[ "$network_choice" == "1" ]]; then
-  NETUID=27
-  SUBTENSOR_NETWORK_DEFAULT="subvortex.info:9944"
-elif [[ "$network_choice" == "2" ]]; then
-  NETUID=15
-  SUBTENSOR_NETWORK_DEFAULT="test"
-else
-  echo "Invalid choice. Defaulting to Main Network."
-  NETUID=27
-  SUBTENSOR_NETWORK_DEFAULT="subvortex.info:9944"
-fi
-
-read -rp "Enter the --subtensor.network value (default: ${SUBTENSOR_NETWORK_DEFAULT}): " SUBTENSOR_NETWORK
-SUBTENSOR_NETWORK=${SUBTENSOR_NETWORK:-$SUBTENSOR_NETWORK_DEFAULT}
-
-# Ask for axon port
-read -rp "Enter the axon port (default: 8091): " axon_port
-axon_port=${axon_port:-8091}
-
-##############################################
-# Wallet Selection
-##############################################
-echo
-ohai "Detecting available wallets in ${DEFAULT_WALLET_DIR}..."
-wallet_files=("${DEFAULT_WALLET_DIR}"/*)
-if [ ${#wallet_files[@]} -eq 0 ]; then
-    echo "No wallets found in ${DEFAULT_WALLET_DIR}."
-    echo "Please create your wallets using:"
-    echo "  btcli w new_coldkey"
-    echo "  btcli w new_hotkey"
-    exit 1
-else
-    echo "Available wallets:"
-    i=1
-    declare -A wallet_map
-    for wallet in "${wallet_files[@]}"; do
-      wallet_name=$(basename "$wallet")
-      echo "  [$i] $wallet_name"
-      wallet_map[$i]="$wallet_name"
-      ((i++))
-    done
-fi
+ohai "Detecting available coldkey wallets in ${DEFAULT_WALLET_DIR}..."
+i=1
+declare -A wallet_map
+for wallet in "${DEFAULT_WALLET_DIR}"/*; do
+  wallet_name=$(basename "$wallet")
+  echo "  [$i] $wallet_name"
+  wallet_map[$i]="$wallet_name"
+  ((i++))
+done
 
 read -rp "Enter the number corresponding to your COLDKEY wallet: " coldkey_choice
 COLDKEY_WALLET="${wallet_map[$coldkey_choice]}"
@@ -185,11 +143,71 @@ if [[ -z "$COLDKEY_WALLET" ]]; then
   abort "Invalid selection for coldkey wallet."
 fi
 
-read -rp "Enter the number corresponding to your HOTKEY wallet: " hotkey_choice
-HOTKEY_WALLET="${wallet_map[$hotkey_choice]}"
-if [[ -z "$HOTKEY_WALLET" ]]; then
-  abort "Invalid selection for hotkey wallet."
+# Now list available hotkeys inside the selected coldkey wallet's hotkeys directory
+HOTKEY_DIR="${DEFAULT_WALLET_DIR}/${COLDKEY_WALLET}/hotkeys"
+if [ ! -d "$HOTKEY_DIR" ] || [ -z "$(ls -A "$HOTKEY_DIR")" ]; then
+    abort "No hotkeys found for coldkey wallet ${COLDKEY_WALLET} in $HOTKEY_DIR"
 fi
+
+ohai "Available hotkeys for coldkey ${COLDKEY_WALLET}:"
+i=1
+declare -A hotkey_map
+for hotkey in "$HOTKEY_DIR"/*; do
+  hk_name=$(basename "$hotkey")
+  echo "  [$i] $hk_name"
+  hotkey_map[$i]="$hk_name"
+  ((i++))
+done
+
+read -rp "Enter the number corresponding to your HOTKEY: " hotkey_choice
+HOTKEY_WALLET="${hotkey_map[$hotkey_choice]}"
+if [[ -z "$HOTKEY_WALLET" ]]; then
+  abort "Invalid selection for hotkey."
+fi
+
+##############################################
+# Configure UFW (Firewall)
+##############################################
+ohai "Installing and configuring UFW..."
+sudo apt-get update
+sudo apt-get install -y ufw || abort "Failed to install ufw."
+ohai "Allowing SSH (port 22) through UFW..."
+sudo ufw allow 22/tcp
+ohai "Allowing validator port 4444 through UFW..."
+sudo ufw allow 4444/tcp
+ohai "Allowing Axon port ${axon_port} through UFW..."
+sudo ufw allow "${axon_port}/tcp"
+ohai "Enabling UFW..."
+sudo ufw --force enable
+ohai "UFW configured. Open ports: 22 (SSH), 4444 (validators), ${axon_port} (Axon)."
+
+##############################################
+# Configure WANDB API Key in .env
+##############################################
+ask_user_for_wandb_key() {
+  read -rp "Enter WANDB_API_KEY (leave blank if none): " WANDB_API_KEY
+}
+
+inject_wandb_env() {
+  local env_example="${CS_PATH}/.env.example"
+  local env_path="${CS_PATH}/.env"
+  ohai "Configuring .env for compute‑subnet..."
+  if [[ ! -f "$env_path" ]] && [[ -f "$env_example" ]]; then
+    ohai "Copying .env.example to .env"
+    cp "$env_example" "$env_path" || abort "Failed to copy .env.example to .env"
+  fi
+
+  if [[ -n "$WANDB_API_KEY" ]]; then
+    ohai "Updating WANDB_API_KEY in .env"
+    sed -i "s|^WANDB_API_KEY=.*|WANDB_API_KEY=\"$WANDB_API_KEY\"|" "$env_path" || abort "Failed to update .env"
+  else
+    ohai "No WANDB_API_KEY provided. Skipping replacement in .env."
+  fi
+  ohai "Done configuring .env"
+}
+
+ask_user_for_wandb_key
+inject_wandb_env
 
 ##############################################
 # Verify Miner Script and Set Permissions
