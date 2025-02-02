@@ -31,10 +31,21 @@ fi
 ##############################################
 # Define Remaining Key Variables
 ##############################################
-BASHRC="${HOME_DIR}/.bashrc"
-
-# Since this installer is part of the Compute-Subnet repository, assume the repo root is the current directory.
+# Assume the script is part of the Compute-Subnet repository.
+# Set CS_PATH to the current directory.
 CS_PATH="$(pwd)"
+
+# If the expected project files (setup.py or pyproject.toml) are not in CS_PATH,
+# try the parent directory.
+if [ ! -f "$CS_PATH/setup.py" ] && [ ! -f "$CS_PATH/pyproject.toml" ]; then
+    if [ -f "$(dirname "$CS_PATH")/setup.py" ] || [ -f "$(dirname "$CS_PATH")/pyproject.toml" ]; then
+         ohai "Detected that the script is running in a subdirectory; switching to repository root."
+         cd "$(dirname "$CS_PATH")" || abort "Failed to change directory to repository root"
+         CS_PATH="$(pwd)"
+    else
+         abort "Repository root not found. Please run this script from within the compute-subnet repository."
+    fi
+fi
 
 # Define the expected location for the virtual environment.
 VENV_DIR="${HOME_DIR}/venv"
@@ -72,15 +83,6 @@ if [ -z "${VIRTUAL_ENV:-}" ] || [ "$VIRTUAL_ENV" != "$VENV_DIR" ]; then
 fi
 
 ##############################################
-# Ensure btcli is Available (i.e. Bittensor is Installed)
-##############################################
-if ! command -v btcli >/dev/null 2>&1; then
-    ohai "btcli command not found. Installing Compute-Subnet in editable mode..."
-    pip install --upgrade pip || abort "Failed to upgrade pip."
-    pip install -e . || abort "Editable install of Compute-Subnet failed."
-fi
-
-##############################################
 # Install System Prerequisites (if needed)
 ##############################################
 ohai "Updating package lists and installing system prerequisites..."
@@ -96,6 +98,8 @@ pip install --upgrade pip || abort "Failed to upgrade pip in virtual environment
 ohai "Installing Compute-Subnet dependencies..."
 pip install -r requirements.txt || abort "Failed to install base requirements."
 pip install --no-deps -r requirements-compute.txt || abort "Failed to install compute requirements."
+
+ohai "Installing Compute-Subnet in editable mode..."
 pip install -e . || abort "Editable install of Compute-Subnet failed."
 
 ##############################################
