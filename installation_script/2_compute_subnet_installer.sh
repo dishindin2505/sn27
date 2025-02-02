@@ -125,6 +125,37 @@ sudo apt-get install -y npm || abort "Failed to install npm."
 sudo npm install -g pm2 || abort "Failed to install PM2."
 
 ##############################################
+# Configuration: Ask User for Miner Setup Parameters
+##############################################
+echo
+echo "Please configure your miner setup."
+echo "-------------------------------------"
+
+# Network selection: Netuid is either 27 (Main) or 15 (Test)
+echo "Select the Bittensor network:"
+echo "  1) Main Network (netuid 27)"
+echo "  2) Test Network (netuid 15)"
+read -rp "Enter your choice [1 or 2]: " network_choice
+if [[ "$network_choice" == "1" ]]; then
+  NETUID=27
+  SUBTENSOR_NETWORK_DEFAULT="subvortex.info:9944"
+elif [[ "$network_choice" == "2" ]]; then
+  NETUID=15
+  SUBTENSOR_NETWORK_DEFAULT="test"
+else
+  echo "Invalid choice. Defaulting to Main Network."
+  NETUID=27
+  SUBTENSOR_NETWORK_DEFAULT="subvortex.info:9944"
+fi
+
+read -rp "Enter the --subtensor.network value (default: ${SUBTENSOR_NETWORK_DEFAULT}): " SUBTENSOR_NETWORK
+SUBTENSOR_NETWORK=${SUBTENSOR_NETWORK:-$SUBTENSOR_NETWORK_DEFAULT}
+
+# *** Ask for Axon Port NOW ***
+read -rp "Enter the axon port (default: 8091): " axon_port
+axon_port=${axon_port:-8091}
+
+##############################################
 # Wallet Selection: Choose Coldkey and Hotkey
 ##############################################
 ohai "Detecting available coldkey wallets in ${DEFAULT_WALLET_DIR}..."
