@@ -12,15 +12,28 @@ ohai() {
 }
 
 ##############################################
-# Define Key Variables
+# Pre-check: Ensure Bittensor Wallets Exist
 ##############################################
-# Use SUDO_USER if available, otherwise the current user.
+# Define key variables for wallet location
 USER_NAME=${SUDO_USER:-$(whoami)}
 HOME_DIR=$(eval echo "~${USER_NAME}")
-BASHRC="${HOME_DIR}/.bashrc"
 DEFAULT_WALLET_DIR="${HOME_DIR}/.bittensor/wallets"
 
-# Since this installer is now part of the Compute-Subnet repo, assume the repo root is the current directory.
+if [ ! -d "${DEFAULT_WALLET_DIR}" ] || [ -z "$(ls -A ${DEFAULT_WALLET_DIR} 2>/dev/null)" ]; then
+  ohai "WARNING: No Bittensor wallets detected in ${DEFAULT_WALLET_DIR}."
+  echo "Before running this installer, please create a wallet pair by executing the following commands:"
+  echo "    btcli w new_coldkey"
+  echo "    btcli w new_hotkey"
+  echo "After creating your wallets, re-run this script."
+  exit 1
+fi
+
+##############################################
+# Define Remaining Key Variables
+##############################################
+BASHRC="${HOME_DIR}/.bashrc"
+
+# Since this installer is part of the Compute-Subnet repository, assume the repo root is the current directory.
 CS_PATH="$(pwd)"
 
 # Define the expected location for the virtual environment.
@@ -57,18 +70,6 @@ if ! command -v btcli >/dev/null 2>&1; then
     ohai "btcli command not found. Installing Compute-Subnet in editable mode..."
     pip install --upgrade pip || abort "Failed to upgrade pip."
     pip install -e . || abort "Editable install of Compute-Subnet failed."
-fi
-
-##############################################
-# Check for Wallets and Instruct User to Create Them if Missing
-##############################################
-if [ ! -d "${DEFAULT_WALLET_DIR}" ] || [ -z "$(ls -A ${DEFAULT_WALLET_DIR} 2>/dev/null)" ]; then
-  ohai "No wallets found in ${DEFAULT_WALLET_DIR}."
-  echo "It looks like you haven't created any wallets yet."
-  echo "Please run the following commands (with your virtual environment active):"
-  echo "  btcli new_coldkey"
-  echo "  btcli new_hotkey"
-  exit 1
 fi
 
 ##############################################
@@ -143,8 +144,8 @@ wallet_files=("${DEFAULT_WALLET_DIR}"/*)
 if [ ${#wallet_files[@]} -eq 0 ]; then
     echo "No wallets found in ${DEFAULT_WALLET_DIR}."
     echo "Please create your wallets using:"
-    echo "  btcli new_coldkey"
-    echo "  btcli new_hotkey"
+    echo "  btcli w new_coldkey"
+    echo "  btcli w new_hotkey"
     exit 1
 else
     echo "Available wallets:"
