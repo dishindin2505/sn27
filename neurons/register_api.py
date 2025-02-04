@@ -312,7 +312,7 @@ class RegisterAPI:
         if self.config.logging.trace:
             self.app = FastAPI(debug=False)
         else:
-            self.app = FastAPI(debug=False, docs_url=None, redoc_url=None)
+            self.app = FastAPI(debug=False, docs_url="/docs", redoc_url=None)
 
         load_dotenv()
         self._setup_routes()
@@ -1679,9 +1679,6 @@ class RegisterAPI:
                     configs = run_config.get("config")
                     is_active = any(axon.hotkey == run_hotkey for axon in self.metagraph.axons)
 
-                    #if is_active:
-                        #bt.logging.info(f"DEBUG - This hotkey is active - {run_hotkey}")
-                    # check the signature
                     is_penalized = run_hotkey in penalized_hotkeys
 
                     if (
@@ -1863,9 +1860,10 @@ class RegisterAPI:
 
             bt.logging.info(f"API: List resources(wandb) on compute subnet")
             self.wandb.api.flush()
-
+            start_time = time.time()
             specs_details,running_hotkey = await get_wandb_running_miners()
-
+            end_time = time.time()
+            bt.logging.info(f"API: Time taken to get the data: {end_time - start_time:.2f} seconds")
             bt.logging.info(f"API: Number of running miners: {len(running_hotkey)}")
 
             # Initialize a dictionary to keep track of GPU instances
