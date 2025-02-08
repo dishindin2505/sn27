@@ -176,25 +176,14 @@ linux_install_compute_subnet() {
     exit_on_error $?
 }
 
-linux_install_hashcat() {
-    wget https://hashcat.net/files/hashcat-6.2.6.tar.gz
-    tar xzvf hashcat-6.2.6.tar.gz
-    cd hashcat-6.2.6/
-    sudo make
-    sudo make install
-    export PATH=$PATH:/usr/local/bin/
-    echo "export PATH=$PATH">>~/.bashrc
-    cd ~
-}
-
 linux_install_nvidia_cuda() {
-    wget https://developer.download.nvidia.com/compute/cuda/12.3.1/local_installers/cuda-repo-ubuntu2204-12-3-local_12.3.1-545.23.08-1_amd64.deb
-    sudo dpkg -i cuda-repo-ubuntu2204-12-3-local_12.3.1-545.23.08-1_amd64.deb
-    sudo cp /var/cuda-repo-ubuntu2204-12-3-local/cuda-*-keyring.gpg /usr/share/keyrings/
+    wget https://developer.download.nvidia.com/compute/cuda/12.4.0/local_installers/cuda-repo-ubuntu2204-12-4-local_12.4.0-550.54.14-1_amd64.deb
+    sudo dpkg -i cuda-repo-ubuntu2204-12-4-local_12.4.0-550.54.14-1_amd64.deb
+    sudo cp /var/cuda-repo-ubuntu2204-12-4-local/cuda-*-keyring.gpg /usr/share/keyrings/
     sudo apt-get update
-    sudo apt-get -y install cuda-toolkit-12-3
+    sudo apt-get -y install cuda-toolkit-12-4
     sudo apt-get -y install -y cuda-drivers
-    export CUDA_VERSION=cuda-12.3
+    export CUDA_VERSION=cuda-12.4
     export PATH=$PATH:/usr/local/$CUDA_VERSION/bin
     export LD_LIBRARY_PATH=/usr/local/$CUDA_VERSION/lib64
     echo "">>~/.bashrc
