@@ -176,21 +176,6 @@ linux_install_compute_subnet() {
     exit_on_error $?
 }
 
-linux_install_nvidia_cuda() {
-    wget https://developer.download.nvidia.com/compute/cuda/12.2.0/local_installers/cuda-repo-ubuntu2204-12-2-local_12.2.0-535.54.03-1_amd64.deb
-    sudo dpkg -i cuda-repo-ubuntu2204-12-2-local_12.2.0-535.54.03-1_amd64.deb
-    sudo cp /var/cuda-repo-ubuntu2204-12-2-local/cuda-*-keyring.gpg /usr/share/keyrings/
-    sudo apt-get update
-    sudo apt-get -y install cuda-toolkit-12-2
-    sudo apt-get -y install -y cuda-drivers
-    export CUDA_VERSION=cuda-12.2
-    export PATH=$PATH:/usr/local/$CUDA_VERSION/bin
-    export LD_LIBRARY_PATH=/usr/local/$CUDA_VERSION/lib64
-    echo "">>~/.bashrc
-    echo "PATH=$PATH">>~/.bashrc
-    echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH">>~/.bashrc
-}
-
 linux_install_ufw() {
     sudo apt update
     sudo apt install -y ufw
